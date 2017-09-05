@@ -4,17 +4,32 @@
 pac - wrapper around pacaur to mimic yaourts search feature
 
 Usage:
-    pac <searchpattern>
+  pac
+  pac <search_pattern>...
+  pac (-a | --autoremove)
+  pac (-h | --help)
+  pac (-v | --version)
+  pac <pacaur arguments>...
+
+Options:
+  -a, --autoremove  Removes orphan packages
+  -h, --help        Display this help
+  -v, --version     Display version information
+
+Invoking pac without arguments is equivalent to 'pacaur -Syu'.
+
+https://github.com/XenGi/pac
 """
 
 __author__ = 'Ricardo Band'
 __copyright__ = 'Copyright 2017, Ricardo band'
 __credits__ = ['Ricardo Band', 'spacekookie']
 __license__ = 'MIT'
-__version__ = '1.3.5'
+__version__ = '1.3.6'
 __maintainer__ = 'Ricardo Band'
 __email__ = 'email@ricardo.band'
 
+import re
 import sys
 from typing import List
 from subprocess import call, run, PIPE
@@ -60,26 +75,16 @@ def search(search_term: str) -> List[dict]:
             # create a new entry
             entry = {}
         elif line != '':
-            l = line.split('/')
-            entry['repo'] = l[0]
-            l = l[1].split(' ')
-            entry['package'] = l[0]
-            entry['version'] = l[1]
-            entry['votes'] = None
-            entry['group'] = None
-            entry['installed'] = None
-            if len(l) > 2 and l[2].startswith('('):
-                if l[2].endswith(')'):
-                    entry['group'] = l[2]
-                else:
-                    entry['votes'] = f'{l[2]} {l[3]}'
-            if len(l) > 3 and l[3].startswith('('):
-                if l[3].endswith(')'):
-                    entry['group'] = l[3]
-                else:
-                    entry['votes'] = f'{l[3]} {l[4]}'
-            if '[installed]' in l:
-                entry['installed'] = '[installed]'
+            pattern = (
+                r'(?P<repo>.+?)/(?P<package>.+?)'
+                r' (?P<version>[^ ]+)'
+                # Optional parts
+                r'( \((?P<votes>[0-9]+), (?P<popularity>.+?)\))?'
+                r'( \((?P<group>.+?)\))?'
+                r'( \[(?P<status>.+?)\])?'
+            )
+            m = re.match(pattern, line)
+            entry.update(m.groupdict())
     return result
 
 
@@ -102,6 +107,7 @@ def present(entries: List[dict]):
     CBOLD: str = '\33[1m'
     CBLACK: str = '\33[30m'
     CVIOLET: str = '\33[35m'
+    CBLUE2: str = '\33[94m'
     CGREEN2: str = '\33[92m'
     CYELLOW2: str = '\33[93m'
     CVIOLET2: str = '\33[95m'
@@ -112,11 +118,12 @@ def present(entries: List[dict]):
         padding = len(str(index + 1))
         print(f"{CBLACK}{CYELLOWBG}{index + 1}{CEND} {CVIOLET2}{entry['repo']}/{CEND}{CBOLD}{entry['package']}{CEND} {CGREEN2}{entry['version']}{CEND}", end='')
         if entry['group']:
-            print(f" {entry['group']}", end='')
-        if entry['installed']:
-            print(f" {CBLACK}{CYELLOWBG2}{entry['installed']}{CEND}", end='')
+            print(f" {CBLUE2}({entry['group']}){CEND}", end='')
+        if entry['status']:
+            print(f" {CBLACK}{CYELLOWBG2}[{entry['status']}]{CEND}", end='')
         if entry['votes']:
-            print(f" {CBLACK}{CYELLOWBG2}{entry['votes']}{CEND}", end='')
+            votes = "({votes}, {popularity})".format(**entry)
+            print(f" {CBLACK}{CYELLOWBG2}{votes}{CEND}", end='')
         print(f"\n{' ' * len(str(index + 1))} {entry['description']}")
     print(f'{CYELLOW2}==>{CEND} {CBOLD}Enter n° of packages to be installed (ex: 1 2 3 or 1-3){CEND}')
     print(f'{CYELLOW2}==>{CEND} {CBOLD}-------------------------------------------------------{CEND}')
@@ -167,23 +174,9 @@ def autoremove():
 if __name__ == '__main__':
     if len(sys.argv) > 1:
         if '-h' in sys.argv[1:] or '--help' in sys.argv[1:]:
-            print(('pac - wrapper around pacaur to mimic yaourts search feature\n'
-                   '\n'
-                   'Usage:\n'
-                   '    pac\n'
-                   '    pac <search_pattern>\n'
-                   '    pac (-a | --autoremove)\n'
-                   '    pac (-h | --help)\n'
-                   '    pac <pacaur_arguments>\n'
-                   '\n'
-                   'Options:\n'
-                   '-a, --autoremove    Removes orphan packages.\n'
-                   '-h, --help          Shows this help.\n'
-                   '\n'
-                   'Invoking pac without arguments is equivalent to `pacaur -Syu`.\n'
-                   '\n'
-                   'MIT licensed\n'
-                   'https://github.com/XenGi/pac\n'))
+            print(__doc__)
+        elif '-v' in sys.argv[1:] or '--version' in sys.argv[1:]:
+            print('pac v%s' % __version__)
         elif '-a' in sys.argv[1:] or '--autoremove' in sys.argv[1:]:
             # TODO: add warning
             autoremove()
